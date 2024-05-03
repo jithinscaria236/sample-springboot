@@ -1,0 +1,68 @@
+pipeline {
+    agent any
+    stages {
+        stage("Clone Git Repository") {
+            steps {
+                git(
+                    url: "https://github.com/jithinscaria236/sample-springboot.git",
+                    branch: "main",
+                    changelog: true,
+                    poll: true
+                )
+            }
+        }
+
+        stage('Test') {
+            steps {
+                // Run tests if needed
+                sh '/opt/maven/bin/mvn test'
+            }
+        }
+        stage('Test with SonarQube') {
+            steps {
+                withSonarQubeEnv('sonar-server') {
+                    sh '/opt/maven/bin/mvn sonar:sonar -Dsonar.projectKey=test -Dsonar.projectName=test -Dsonar.projectVersion=1.0'
+                }
+            }
+        }
+        stage('Build') {
+            steps {
+                // Use Maven to build your project
+                sh '/opt/maven/bin/mvn clean install'
+            }
+        }
+        stage('Copy File') {
+            steps {
+                script {
+                    // Copy file to remote machine
+                    sshagent(['c3fc5dff-7067-4af6-ba8b-650d3e8a8840']) {
+                        sh 'scp  -o StrictHostKeyChecking=no target/springBootDocker-1.0.0.jar ubuntu@54.144.130.162:/home/ubuntu/maven/'
+                        sh 'scp  -o StrictHostKeyChecking=no Dockerfile ubuntu@54.144.130.162:/home/ubuntu/maven/'
+                    }
+                }
+            }
+        }
+         stage('Build Docker Image') {
+            steps {
+                script {
+                    // Copy file to remote machine
+                    sshagent(['c3fc5dff-7067-4af6-ba8b-650d3e8a8840']) {
+                      
+                        sh 'ssh -o StrictHostKeyChecking=no ubuntu@54.144.130.162 "cd /home/ubuntu/maven/ && docker build -t springboot-01 ."'
+                    }
+                }
+            }
+        }
+        stage('Deploy Docker Image') {
+            steps {
+                script {
+                    // Copy file to remote machine
+                    sshagent(['c3fc5dff-7067-4af6-ba8b-650d3e8a8840']) {
+                      
+                        sh 'ssh -o StrictHostKeyChecking=no ubuntu@54.144.130.162 "docker run -d -p8080:8080 springboot-01"'
+                    }
+                }
+            }
+        }
+    }
+}
